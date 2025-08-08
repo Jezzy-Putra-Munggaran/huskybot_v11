@@ -1,0 +1,27 @@
+# ROS2 Build Artifacts
+build/
+install/
+log/
+
+# Models
+models/*.engine
+models/*.onnx
+models/*.pt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/settings.json
+.vscode/launch.json
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
