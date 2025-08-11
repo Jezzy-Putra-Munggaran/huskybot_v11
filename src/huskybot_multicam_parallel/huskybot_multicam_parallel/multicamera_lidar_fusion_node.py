@@ -334,7 +334,7 @@ class MultiCameraLiDARFusionNode(Node):
             scale = 1.0
         
         results = self.yolo_model.predict(
-            image_resized, conf=0.25, iou=0.45, verbose=False, task='segment', device='cpu')
+            image_resized, conf=0.25, iou=0.45, verbose=False, task='segment', device='cpu' if not self.use_cuda else 0)
         
         if not results or len(results) == 0:
             return []

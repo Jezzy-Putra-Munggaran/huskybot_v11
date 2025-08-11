@@ -307,7 +307,7 @@ class LiDARCameraFusionNode(Node):
                     iou=0.45,
                     verbose=False,
                     task='segment',
-                    device='cpu'
+                    device='cpu' if not self.use_cuda else 0
                 )
                 
                 # ✅ Extract LiDAR points
