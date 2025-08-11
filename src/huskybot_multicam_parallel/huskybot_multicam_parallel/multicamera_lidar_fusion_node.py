@@ -18,6 +18,7 @@ import sensor_msgs_py.point_cloud2 as pc2
 from collections import defaultdict
 import json
 from .opencv_cuda_accelerator import OpenCVCudaAccelerator
+from .indoor_object_filter import IndoorObjectFilter
 
 class MultiCameraLiDARFusionNode(Node):
     def __init__(self):
@@ -102,6 +103,10 @@ class MultiCameraLiDARFusionNode(Node):
         # ✅ Setup CUDA Accelerator
         self.cuda_accelerator = OpenCVCudaAccelerator(use_cuda=True)
         self.get_logger().info(f"🚀 CUDA Accelerator initialized for multi-camera fusion")
+        
+        # 🏠 Setup Indoor Object Filter
+        self.indoor_filter = IndoorObjectFilter()
+        self.get_logger().info(f"🏠 Indoor Object Filter initialized for multi-camera fusion")
         
         # ✅ Setup calibration matrices for each camera
         self.setup_all_calibrations()
@@ -357,6 +362,10 @@ class MultiCameraLiDARFusionNode(Node):
             names = result.names if hasattr(result, 'names') else {}
             
             for i, (box, score, cls_id) in enumerate(zip(boxes, scores, classes)):
+                # 🏠 INDOOR OBJECT FILTER - Skip objects not in allowed list  
+                if not self.indoor_filter.is_allowed_class(int(cls_id)):
+                    continue
+                    
                 # Scale back to original image
                 x1 = int(box[0] / scale)
                 y1 = int(box[1] / scale)

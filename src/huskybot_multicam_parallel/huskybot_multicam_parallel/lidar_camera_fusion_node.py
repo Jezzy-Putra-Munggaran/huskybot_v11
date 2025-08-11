@@ -15,6 +15,7 @@ import numpy as np
 import time
 import threading
 from .opencv_cuda_accelerator import OpenCVCudaAccelerator
+from .indoor_object_filter import IndoorObjectFilter
 
 class LiDARCameraFusionNode(Node):
     def __init__(self):
@@ -52,6 +53,10 @@ class LiDARCameraFusionNode(Node):
         # ✅ Setup CUDA Accelerator
         self.cuda_accelerator = OpenCVCudaAccelerator(use_cuda=True)
         self.get_logger().info(f"🚀 CUDA Accelerator initialized for fusion node")
+        
+        # 🏠 Setup Indoor Object Filter
+        self.indoor_filter = IndoorObjectFilter()
+        self.get_logger().info(f"🏠 Indoor Object Filter initialized for fusion node")
         
         # ✅ Setup subscribers and publishers
         self.setup_connections()
@@ -356,6 +361,10 @@ class LiDARCameraFusionNode(Node):
             names = result.names if hasattr(result, 'names') else {}
             
             for i, (box, score, cls_id) in enumerate(zip(boxes, scores, classes)):
+                # 🏠 INDOOR OBJECT FILTER - Skip objects not in allowed list
+                if not self.indoor_filter.is_allowed_class(int(cls_id)):
+                    continue
+                    
                 # Scale coordinates back to original frame
                 x1 = int(box[0] / scale)
                 y1 = int(box[1] / scale)

@@ -11,6 +11,7 @@ import time
 import threading
 import os
 from .opencv_cuda_accelerator import OpenCVCudaAccelerator
+from .indoor_object_filter import IndoorObjectFilter
 
 class SingleCameraProcessor(Node):
     def __init__(self):
@@ -44,6 +45,10 @@ class SingleCameraProcessor(Node):
         # ✅ Setup CUDA Accelerator
         self.cuda_accelerator = OpenCVCudaAccelerator(use_cuda=True)
         self.get_logger().info(f"🚀 CUDA Accelerator initialized for {self.camera_real_name}")
+        
+        # ✅ Setup Indoor Object Filter
+        self.indoor_filter = IndoorObjectFilter()
+        self.get_logger().info(f"🏠 Indoor Object Filter initialized - detecting 10 indoor objects only")
         
         # ✅ Setup connections
         self.setup_connections()
@@ -177,7 +182,7 @@ class SingleCameraProcessor(Node):
                         device='cpu' if not self.use_cuda else 0
                     )
                     
-                    # Process results
+                    # Process results with indoor filtering
                     detections = self.process_results(results, self.camera_idx, original_frame, scale)
                     
                     with self.frame_lock:
@@ -244,6 +249,19 @@ class SingleCameraProcessor(Node):
                     original_masks = result.masks.xy if hasattr(result.masks, 'xy') else None
                 
                 for i, (box, score, cls_id) in enumerate(zip(boxes, scores, classes)):
+                    # 🏠 INDOOR OBJECT FILTER - Skip objects not in allowed list
+                    if not self.indoor_filter.is_allowed_class(int(cls_id)):
+                        # Log filtered objects occasionally
+                        if hasattr(self, '_filter_log_counter'):
+                            self._filter_log_counter += 1
+                        else:
+                            self._filter_log_counter = 1
+                        
+                        if self._filter_log_counter % 50 == 0:  # Log every 50 filtered objects
+                            class_name = names.get(int(cls_id), f"class_{int(cls_id)}")
+                            self.get_logger().info(f"🏠 Filtered {self._filter_log_counter} outdoor objects (latest: {class_name})")
+                        continue
+                    
                     # Scale coordinates back to original frame - FIXED
                     x1 = int(box[0] / processing_scale)
                     y1 = int(box[1] / processing_scale)
