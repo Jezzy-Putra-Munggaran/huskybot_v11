@@ -10,6 +10,7 @@ import numpy as np
 import time
 import threading
 import os
+from .opencv_cuda_accelerator import OpenCVCudaAccelerator
 
 class SingleCameraProcessor(Node):
     def __init__(self):
@@ -39,6 +40,10 @@ class SingleCameraProcessor(Node):
         
         # ✅ Setup YOLO
         self.setup_yolo()
+        
+        # ✅ Setup CUDA Accelerator
+        self.cuda_accelerator = OpenCVCudaAccelerator(use_cuda=True)
+        self.get_logger().info(f"🚀 CUDA Accelerator initialized for {self.camera_real_name}")
         
         # ✅ Setup connections
         self.setup_connections()
@@ -362,17 +367,30 @@ class SingleCameraProcessor(Node):
                                 kernel_medium = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
                                 kernel_large = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
                                 
+                                # 🚀 CUDA-accelerated morphological operations
                                 # Step 1: Remove small noise
-                                mask_cleaned = cv2.morphologyEx(mask_binary, cv2.MORPH_OPEN, kernel_small)
+                                try:
+                                    mask_cleaned = self.cuda_accelerator.morphology_ex(mask_binary, cv2.MORPH_OPEN, kernel_small)
+                                except:
+                                    mask_cleaned = cv2.morphologyEx(mask_binary, cv2.MORPH_OPEN, kernel_small)
                                 
                                 # Step 2: Fill small holes
-                                mask_cleaned = cv2.morphologyEx(mask_cleaned, cv2.MORPH_CLOSE, kernel_medium)
+                                try:
+                                    mask_cleaned = self.cuda_accelerator.morphology_ex(mask_cleaned, cv2.MORPH_CLOSE, kernel_medium)
+                                except:
+                                    mask_cleaned = cv2.morphologyEx(mask_cleaned, cv2.MORPH_CLOSE, kernel_medium)
                                 
                                 # Step 3: Smooth boundaries
-                                mask_cleaned = cv2.morphologyEx(mask_cleaned, cv2.MORPH_CLOSE, kernel_large)
+                                try:
+                                    mask_cleaned = self.cuda_accelerator.morphology_ex(mask_cleaned, cv2.MORPH_CLOSE, kernel_large)
+                                except:
+                                    mask_cleaned = cv2.morphologyEx(mask_cleaned, cv2.MORPH_CLOSE, kernel_large)
                                 
-                                # Step 4: Final smoothing with Gaussian blur and threshold
-                                mask_smoothed = cv2.GaussianBlur(mask_cleaned.astype(np.float32), (3, 3), 0.5)
+                                # 🚀 CUDA-accelerated Gaussian blur for final smoothing
+                                try:
+                                    mask_smoothed = self.cuda_accelerator.gaussian_blur(mask_cleaned.astype(np.float32), (3, 3), 0.5)
+                                except:
+                                    mask_smoothed = cv2.GaussianBlur(mask_cleaned.astype(np.float32), (3, 3), 0.5)
                                 processed_mask = (mask_smoothed > 0.5).astype(np.uint8)
                         
                         except Exception as e:
@@ -467,11 +485,17 @@ class SingleCameraProcessor(Node):
                         # Only apply mask where mask exists
                         mask_indices = mask == 1
                         if np.any(mask_indices):
-                            # Advanced alpha blending with edge enhancement
-                            canvas[mask_indices] = cv2.addWeighted(
-                                canvas[mask_indices], 1-alpha, 
-                                mask_colored[mask_indices], alpha, 0
-                            )
+                            # 🚀 CUDA-accelerated alpha blending with edge enhancement
+                            try:
+                                canvas[mask_indices] = self.cuda_accelerator.add_weighted(
+                                    canvas[mask_indices], 1-alpha, 
+                                    mask_colored[mask_indices], alpha, 0
+                                )
+                            except:
+                                canvas[mask_indices] = cv2.addWeighted(
+                                    canvas[mask_indices], 1-alpha, 
+                                    mask_colored[mask_indices], alpha, 0
+                                )
                         
                         # Add multiple contour layers for ultra definition
                         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -538,9 +562,12 @@ class SingleCameraProcessor(Node):
                              (text_x + text_bg_width + 3, text_y + text_bg_height + 3), 
                              bbox_color, -1)  # Colored background
                 
-                # Apply transparency (alpha blending)
+                # Apply transparency (alpha blending) - 🚀 CUDA-accelerated
                 alpha = 0.7  # 70% opacity - adjust this value to make more/less transparent
-                cv2.addWeighted(overlay, alpha, canvas, 1 - alpha, 0, canvas)
+                try:
+                    canvas = self.cuda_accelerator.add_weighted(overlay, alpha, canvas, 1 - alpha, 0)
+                except:
+                    cv2.addWeighted(overlay, alpha, canvas, 1 - alpha, 0, canvas)
                 
                 # Clean border (drawn on top, so it stays opaque)
                 cv2.rectangle(canvas, (text_x, text_y), 

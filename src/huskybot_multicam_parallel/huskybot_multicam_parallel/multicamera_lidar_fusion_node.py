@@ -17,6 +17,7 @@ from ultralytics import YOLO
 import sensor_msgs_py.point_cloud2 as pc2
 from collections import defaultdict
 import json
+from .opencv_cuda_accelerator import OpenCVCudaAccelerator
 
 class MultiCameraLiDARFusionNode(Node):
     def __init__(self):
@@ -97,6 +98,10 @@ class MultiCameraLiDARFusionNode(Node):
         
         # ✅ Setup YOLO
         self.setup_yolo()
+        
+        # ✅ Setup CUDA Accelerator
+        self.cuda_accelerator = OpenCVCudaAccelerator(use_cuda=True)
+        self.get_logger().info(f"🚀 CUDA Accelerator initialized for multi-camera fusion")
         
         # ✅ Setup calibration matrices for each camera
         self.setup_all_calibrations()
@@ -619,9 +624,12 @@ class MultiCameraLiDARFusionNode(Node):
             cv2.rectangle(overlay, (x1, y1 - info_height - 5), 
                          (x1 + max_width + 20, y1), (0, 0, 0), -1)
             
-            # Apply transparency (alpha blending)
+            # Apply transparency (alpha blending) - 🚀 CUDA-accelerated
             alpha = 0.7  # 70% opacity
-            cv2.addWeighted(overlay, alpha, vis_image, 1 - alpha, 0, vis_image)
+            try:
+                vis_image = self.cuda_accelerator.add_weighted(overlay, alpha, vis_image, 1 - alpha, 0)
+            except:
+                cv2.addWeighted(overlay, alpha, vis_image, 1 - alpha, 0, vis_image)
             
             # Draw border on top (stays opaque)
             cv2.rectangle(vis_image, (x1, y1 - info_height - 5), 

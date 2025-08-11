@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 """
-LiDAR-Camera Sensor Fusion Node for ULTRA ACCURATE Distance and Coordinate Estimation
-Author: Jezzy Putra Munggaran
-Date: August 5, 2025
+LiDAR-Camera Fusion Node dengan support untuk multiple camera topics
+Menggabungkan data LiDAR 3D dengan deteksi kamera 2D untuk menghasilkan 3D object detection
 """
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image, PointCloud2
-from geometry_msgs.msg import Point32
-from cv_bridge import CvBridge
+from geometry_msgs.msg import Point
 import cv2
+from cv_bridge import CvBridge
 import numpy as np
-import threading
 import time
-from ultralytics import YOLO
-import sensor_msgs_py.point_cloud2 as pc2
-from scipy.spatial import cKDTree
-from collections import defaultdict
+import threading
+from .opencv_cuda_accelerator import OpenCVCudaAccelerator
 
 class LiDARCameraFusionNode(Node):
     def __init__(self):
@@ -49,8 +46,12 @@ class LiDARCameraFusionNode(Node):
         self.image_lock = threading.Lock()
         self.pointcloud_lock = threading.Lock()
         
-        # ✅ Setup YOLO for object detection
+                # ✅ Setup YOLO
         self.setup_yolo()
+        
+        # ✅ Setup CUDA Accelerator
+        self.cuda_accelerator = OpenCVCudaAccelerator(use_cuda=True)
+        self.get_logger().info(f"🚀 CUDA Accelerator initialized for fusion node")
         
         # ✅ Setup subscribers and publishers
         self.setup_connections()
@@ -496,9 +497,12 @@ class LiDARCameraFusionNode(Node):
             cv2.rectangle(overlay, (x1, y1 - info_height - 5), 
                          (x1 + max_line_width + 20, y1), (0, 0, 0), -1)
             
-            # Apply transparency (alpha blending)
+            # Apply transparency (alpha blending) - 🚀 CUDA-accelerated
             alpha = 0.7  # 70% opacity
-            cv2.addWeighted(overlay, alpha, vis_image, 1 - alpha, 0, vis_image)
+            try:
+                vis_image = self.cuda_accelerator.add_weighted(overlay, alpha, vis_image, 1 - alpha, 0)
+            except:
+                cv2.addWeighted(overlay, alpha, vis_image, 1 - alpha, 0, vis_image)
             
             # Draw border on top (stays opaque)
             cv2.rectangle(vis_image, (x1, y1 - info_height - 5), 
